@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:couldai_user_app/models/song_model.dart';
+import 'package:couldai_user_app/models/spotify_models.dart';
+import 'package:couldai_user_app/services/spotify_service.dart';
 
 class PlaylistResultScreen extends StatefulWidget {
   const PlaylistResultScreen({super.key});
@@ -10,34 +11,54 @@ class PlaylistResultScreen extends StatefulWidget {
 
 class _PlaylistResultScreenState extends State<PlaylistResultScreen> {
   late String _prompt;
-  final List<Song> _songs = [
-    Song(title: "Midnight City", artist: "M83", duration: "4:03", imageUrl: "assets/album1.jpg"),
-    Song(title: "Starboy", artist: "The Weeknd", duration: "3:50", imageUrl: "assets/album2.jpg"),
-    Song(title: "Nightcall", artist: "Kavinsky", duration: "4:18", imageUrl: "assets/album3.jpg"),
-    Song(title: "Instant Crush", artist: "Daft Punk", duration: "5:37", imageUrl: "assets/album4.jpg"),
-    Song(title: "Resonance", artist: "Home", duration: "3:32", imageUrl: "assets/album5.jpg"),
-    Song(title: "Blinding Lights", artist: "The Weeknd", duration: "3:20", imageUrl: "assets/album2.jpg"),
-    Song(title: "Tech Noir", artist: "Gunship", duration: "4:57", imageUrl: "assets/album6.jpg"),
-  ];
+  List<SpotifyTrack> _songs = [];
+  bool _isSaving = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final args = ModalRoute.of(context)?.settings.arguments;
-    _prompt = args is String ? args : "Your Vibe";
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args != null) {
+      _prompt = args['prompt'] as String;
+      _songs = args['tracks'] as List<SpotifyTrack>;
+    } else {
+      _prompt = "Your Vibe";
+      _songs = [];
+    }
   }
 
-  void _saveToSpotify() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Playlist saved to your Spotify library!'),
-        backgroundColor: Color(0xFF1DB954),
-      ),
-    );
+  void _saveToSpotify() async {
+    setState(() => _isSaving = true);
+    
+    try {
+      await SpotifyService().savePlaylistToLibrary("CouldAI: $_prompt", _songs);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Playlist saved to your Spotify library!'),
+            backgroundColor: Color(0xFF1DB954),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final totalDurationMs = _songs.fold(0, (sum, item) => sum + item.durationMs);
+    final totalDurationMin = (totalDurationMs / 1000 / 60).round();
+
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -83,13 +104,15 @@ class _PlaylistResultScreenState extends State<PlaylistResultScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '${_songs.length} Songs • 45 min',
+                    '${_songs.length} Songs • $totalDurationMin min',
                     style: const TextStyle(color: Colors.grey),
                   ),
                   ElevatedButton.icon(
-                    onPressed: _saveToSpotify,
-                    icon: const Icon(Icons.save_alt, size: 18),
-                    label: const Text('Save to Spotify'),
+                    onPressed: _isSaving ? null : _saveToSpotify,
+                    icon: _isSaving 
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) 
+                      : const Icon(Icons.save_alt, size: 18),
+                    label: Text(_isSaving ? 'Saving...' : 'Save to Spotify'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: Colors.black,
@@ -109,21 +132,23 @@ class _PlaylistResultScreenState extends State<PlaylistResultScreen> {
                     width: 50,
                     height: 50,
                     color: Colors.grey[800],
-                    child: const Icon(Icons.music_note, color: Colors.white54),
+                    child: song.album.images.isNotEmpty 
+                      ? Image.network(song.album.images.first.url, fit: BoxFit.cover)
+                      : const Icon(Icons.music_note, color: Colors.white54),
                   ),
                   title: Text(
-                    song.title,
+                    song.name,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   subtitle: Text(
-                    song.artist,
+                    song.artistNames,
                     style: const TextStyle(color: Color(0xFFB3B3B3)),
                   ),
                   trailing: Text(
-                    song.duration,
+                    song.durationFormatted,
                     style: const TextStyle(color: Colors.grey, fontSize: 12),
                   ),
                   onTap: () {

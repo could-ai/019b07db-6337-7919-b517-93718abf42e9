@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:couldai_user_app/services/spotify_service.dart';
+import 'package:couldai_user_app/models/spotify_models.dart';
 
 class AnalysisScreen extends StatefulWidget {
   const AnalysisScreen({super.key});
@@ -20,24 +22,29 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       _loadingText = 'Analyzing prompt semantics...';
     });
 
-    // Simulate AI stages
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) setState(() => _loadingText = 'Scanning Spotify library...');
-    
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) setState(() => _loadingText = 'Matching audio features...');
-    
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) setState(() => _loadingText = 'Curating perfect flow...');
+    try {
+      // Use the service to generate the playlist
+      final tracks = await SpotifyService().generatePlaylist(_promptController.text);
 
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (mounted) {
-      Navigator.pushReplacementNamed(
-        context, 
-        '/playlist_result', 
-        arguments: _promptController.text,
-      );
+      if (mounted) {
+        Navigator.pushReplacementNamed(
+          context, 
+          '/playlist_result', 
+          arguments: {
+            'prompt': _promptController.text,
+            'tracks': tracks,
+          },
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isAnalyzing = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error generating playlist: $e')),
+        );
+      }
     }
   }
 
@@ -73,7 +80,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Please wait while we craft your mix',
+                      'Connecting to Spotify API...',
                       style: TextStyle(color: Colors.grey),
                     ),
                   ],

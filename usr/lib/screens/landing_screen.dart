@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:couldai_user_app/services/spotify_service.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -15,14 +16,25 @@ class _LandingScreenState extends State<LandingScreen> {
       _isLoading = true;
     });
 
-    // Simulate network delay for authentication
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Use the service to authenticate
+      await SpotifyService().connectToSpotify();
 
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-      Navigator.pushReplacementNamed(context, '/home');
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Connection failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
